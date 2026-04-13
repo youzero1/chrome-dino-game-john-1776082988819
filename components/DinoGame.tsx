@@ -92,63 +92,119 @@ export default function DinoGame() {
   const [displayHighScore, setDisplayHighScore] = useState(0);
   const [gameStatus, setGameStatus] = useState<'idle' | 'running' | 'over'>('idle');
 
-  const drawDino = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, frame: number, isDucking: boolean, isDead: boolean) => {
-    const w = isDucking ? DINO_WIDTH + 12 : DINO_WIDTH;
-    const h = isDucking ? DINO_HEIGHT - 16 : DINO_HEIGHT;
-    const duckOffset = isDucking ? 16 : 0;
+  // Pixel art dino — closely mimics the Chrome T-Rex
+  // Each row is an array of column indices (0-based) that are filled
+  // Grid: 0 = transparent, 1 = dark (#535353)
+  const drawDino = useCallback((
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    frame: number,
+    isDucking: boolean,
+    isDead: boolean
+  ) => {
+    const S = 4; // pixel scale
 
-    ctx.fillStyle = '#535353';
-
-    // Body
-    ctx.fillRect(x, y + duckOffset, w - 10, h - 10);
+    // Helper: fill a scaled pixel
+    const px = (col: number, row: number, color = '#535353') => {
+      ctx.fillStyle = color;
+      ctx.fillRect(x + col * S, y + row * S, S, S);
+    };
 
     if (!isDucking) {
-      // Head
-      ctx.fillRect(x + 16, y, 28, 20);
-      // Eye
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(x + 30, y + 4, 8, 8);
-      ctx.fillStyle = '#535353';
-      ctx.fillRect(x + 34, y + 6, 4, 4);
-      if (isDead) {
-        // X eyes
-        ctx.fillStyle = '#535353';
-        ctx.fillRect(x + 30, y + 4, 3, 3);
-        ctx.fillRect(x + 35, y + 4, 3, 3);
-        ctx.fillRect(x + 32, y + 6, 3, 3);
-      }
-      // Mouth
-      ctx.fillStyle = '#535353';
-      ctx.fillRect(x + 36, y + 14, 8, 3);
-    } else {
-      // Duck head
-      ctx.fillStyle = '#535353';
-      ctx.fillRect(x + w - 24, y + duckOffset - 10, 24, 16);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(x + w - 12, y + duckOffset - 8, 6, 6);
-      ctx.fillStyle = '#535353';
-      ctx.fillRect(x + w - 10, y + duckOffset - 6, 3, 3);
-    }
+      // ---- Standing / jumping dino (12 cols x 13 rows body grid) ----
+      // Based on the actual Chrome dino pixel art
+      // Row 0 (top of head)
+      //          0123456789AB
+      const rows = [
+        '     XXXXX  ', // 0
+        '     XXXXXXX', // 1
+        '     XX X XX', // 2  eye area
+        '     XXXXXXX', // 3
+        '     XXXXX  ', // 4
+        ' XXXXXXXXX  ', // 5  arm
+        'XXXXXXXXXXX ', // 6
+        ' XXXXXXXXX  ', // 7
+        '   XXXXXXX  ', // 8
+        '    XXXXX   ', // 9
+        '    XX XX   ', // 10  legs
+        '   XX   XX  ', // 11
+        '   X     X  ', // 12
+      ];
 
-    // Legs
-    ctx.fillStyle = '#535353';
-    if (!isDucking) {
-      const legAnim = frame % 2 === 0;
-      if (legAnim) {
-        ctx.fillRect(x + 8, y + h - 10, 8, 18);
-        ctx.fillRect(x + 22, y + h - 4, 8, 12);
+      // Leg animation — swap last 3 rows
+      const legFrame = frame % 2 === 0;
+      const legRows: string[] = [
+        // frame 0: right leg forward
+        '    XX XX   ',
+        '   XX   XX  ',
+        '   X     X  ',
+        // frame 1: left leg forward
+        '    XXXX    ',
+        '    XX      ',
+        '   XX       ',
+      ];
+
+      const fullRows = [
+        ...rows.slice(0, 10),
+        ...(legFrame ? legRows.slice(0, 3) : legRows.slice(3, 6)),
+      ];
+
+      fullRows.forEach((row, r) => {
+        for (let c = 0; c < row.length; c++) {
+          if (row[c] === 'X') {
+            px(c, r);
+          }
+        }
+      });
+
+      // Eye — white part
+      if (!isDead) {
+        px(8, 2, '#ffffff');
+        px(8, 1, '#ffffff');
+        // pupil
+        px(9, 2);
       } else {
-        ctx.fillRect(x + 8, y + h - 4, 8, 12);
-        ctx.fillRect(x + 22, y + h - 10, 8, 18);
+        // Dead X eyes
+        px(7, 1); px(9, 1);
+        px(8, 2);
+        px(7, 3); px(9, 3);
       }
     } else {
-      ctx.fillRect(x + 10, y + duckOffset + h - 10, 10, 12);
-      ctx.fillRect(x + 28, y + duckOffset + h - 10, 10, 12);
-    }
+      // ---- Ducking dino (wider, shorter) ----
+      const rows = [
+        '          XXXXX  ',
+        '          XXXXXXX',
+        '          XX X XX',
+        '          XXXXXXX',
+        ' XXXXXXXXXXXXXXXXX',
+        'XXXXXXXXXXXXXXXXXX',
+        ' XXXXXXXXXXXXXXXXX',
+        '  XXXXXXXXXXXXXXX ',
+        '   XXXXX  XXXXX  ',
+        '   XX      XX    ',
+        '  XX        XX   ',
+      ];
 
-    // Arm
-    if (!isDucking) {
-      ctx.fillRect(x + 2, y + 20, 10, 6);
+      rows.forEach((row, r) => {
+        for (let c = 0; c < row.length; c++) {
+          if (row[c] === 'X') {
+            px(c, r);
+          }
+        }
+      });
+
+      // Eye
+      if (!isDead) {
+        px(13, 2, '#ffffff');
+        px(14, 2, '#ffffff');
+        px(14, 1, '#ffffff');
+        px(15, 2);
+      } else {
+        px(12, 1); px(14, 1);
+        px(13, 2);
+        px(12, 3); px(14, 3);
+      }
     }
   }, []);
 
@@ -157,14 +213,11 @@ export default function DinoGame() {
     ctx.fillStyle = '#535353';
 
     if (type === 'single') {
-      // Main stem
       const stemW = Math.floor(width * 0.45);
       const stemX = x + Math.floor((width - stemW) / 2);
       ctx.fillRect(stemX, GROUND_Y - height, stemW, height);
-      // Left arm
       ctx.fillRect(x, GROUND_Y - height * 0.65, stemX - x, Math.floor(height * 0.15));
       ctx.fillRect(x, GROUND_Y - height * 0.85, Math.floor((stemX - x) * 0.4), Math.floor(height * 0.22));
-      // Right arm
       const rightStart = stemX + stemW;
       ctx.fillRect(rightStart, GROUND_Y - height * 0.55, width - stemW - (stemX - x), Math.floor(height * 0.15));
       ctx.fillRect(rightStart + Math.floor((width - stemW - (stemX - x)) * 0.6), GROUND_Y - height * 0.75, Math.floor((width - stemW - (stemX - x)) * 0.4), Math.floor(height * 0.22));
@@ -212,8 +265,6 @@ export default function DinoGame() {
   const drawGround = useCallback((ctx: CanvasRenderingContext2D, offset: number) => {
     ctx.fillStyle = '#535353';
     ctx.fillRect(0, GROUND_Y, GAME_WIDTH, 3);
-
-    // Ground texture
     ctx.fillStyle = '#888888';
     for (let i = 0; i < 30; i++) {
       const tx = ((i * 50 - offset) % GAME_WIDTH + GAME_WIDTH) % GAME_WIDTH;
@@ -249,7 +300,6 @@ export default function DinoGame() {
       top: dinoY + margin,
       bottom: dinoY + dH - 2,
     };
-
     for (const obs of obstacles) {
       const obsRect = {
         left: obs.x + margin,
@@ -306,7 +356,6 @@ export default function DinoGame() {
     const state = stateRef.current;
 
     if (!state.started) {
-      // Draw idle screen
       ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       drawGround(ctx, 0);
       drawDino(ctx, DINO_X, GROUND_Y - DINO_HEIGHT, 0, false, false);
@@ -327,7 +376,6 @@ export default function DinoGame() {
       state.obstacles.forEach(o => drawCactus(ctx, o));
       drawDino(ctx, DINO_X, state.dinoY, 0, false, true);
       drawScore(ctx, state.score, state.highScore);
-
       ctx.fillStyle = '#535353';
       ctx.font = 'bold 20px "Courier New", monospace';
       ctx.textAlign = 'center';
@@ -339,14 +387,12 @@ export default function DinoGame() {
       return;
     }
 
-    // Update
     const newSpeed = state.speed + SPEED_INCREMENT;
     const newGroundOffset = (state.groundOffset + newSpeed) % GAME_WIDTH;
     const newScore = state.score + 0.1;
     const newFrameCount = state.frameCount + 1;
     const newDinoFrame = newFrameCount % 20 < 10 ? 0 : 1;
 
-    // Physics
     let newDinoY = state.dinoY + state.dinoVY;
     let newDinoVY = state.dinoVY + GRAVITY;
     let newIsJumping = state.isJumping;
@@ -357,16 +403,13 @@ export default function DinoGame() {
       newIsJumping = false;
     }
 
-    // Ducking
     const isDucking = (keysRef.current.has('ArrowDown') || keysRef.current.has('s')) && !state.isJumping;
     const duckY = isDucking ? GROUND_Y - (DINO_HEIGHT - 16) : newDinoY;
 
-    // Move obstacles
     let newObstacles = state.obstacles
       .map(o => ({ ...o, x: o.x - newSpeed }))
       .filter(o => o.x + o.width > -10);
 
-    // Spawn new obstacle
     if (newObstacles.length === 0) {
       newObstacles.push(createObstacle(GAME_WIDTH + 50));
     } else {
@@ -377,7 +420,6 @@ export default function DinoGame() {
       }
     }
 
-    // Move clouds
     let newClouds = state.clouds
       .map(c => ({ ...c, x: c.x - newSpeed * CLOUD_SPEED_RATIO }))
       .filter(c => c.x + c.width > -10);
@@ -385,7 +427,6 @@ export default function DinoGame() {
       newClouds.push(createCloud(GAME_WIDTH + 50 + Math.random() * 200));
     }
 
-    // Collision
     const hit = checkCollision(duckY, isDucking, newObstacles);
     const newHighScore = hit ? Math.max(state.highScore, Math.floor(newScore)) : state.highScore;
 
@@ -397,7 +438,7 @@ export default function DinoGame() {
       isDucking: hit ? false : isDucking,
       obstacles: newObstacles,
       clouds: newClouds,
-      score: hit ? newScore : newScore,
+      score: newScore,
       highScore: newHighScore,
       speed: newSpeed,
       gameOver: hit,
@@ -415,7 +456,6 @@ export default function DinoGame() {
       setDisplayScore(Math.floor(newScore));
     }
 
-    // Draw
     ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     newClouds.forEach(c => drawCloud(ctx, c));
     drawGround(ctx, newGroundOffset);
